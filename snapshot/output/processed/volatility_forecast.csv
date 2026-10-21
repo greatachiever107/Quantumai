@@ -1,0 +1,11 @@
+Ticker,recent_20d_vol_ann_pct,forecast_5d_vol_ann_pct,forecast_vs_recent_pct,typical_daily_move_pct,earnings_in_window,next_earnings
+JPM,18.1,19.2,5.7,1.21,False,2027-01-14
+V,20.8,19.6,-5.7,1.24,False,2026-10-27
+AAPL,16.2,21.1,30.0,1.33,False,2026-11-02
+XOM,21.9,22.6,3.5,1.43,False,2026-10-30
+WMT,25.1,23.7,-5.7,1.49,False,2026-11-19
+JNJ,27.4,24.9,-9.2,1.57,False,2027-01-26
+MSFT,22.3,26.0,16.4,1.64,False,2026-10-28
+AMZN,24.4,27.8,14.0,1.75,False,2026-10-29
+NVDA,24.7,30.0,21.4,1.89,False,2026-11-17
+TSLA,31.6,51.1,61.8,3.22,True,2026-10-21

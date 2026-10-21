@@ -1,0 +1,7 @@
+,avg_MAE,avg_QLIKE,stocks_beating_naive,stocks_beating_v2,MAE_vs_naive_%
+naive_vol20,0.788,0.637,0,0,0.0
+ewma,0.764,0.566,10,0,-3.0
+har_v2_per_stock,0.72,0.549,10,0,-8.6
+panel_ridge,0.668,0.51,10,8,-15.2
+panel_gbm,0.678,0.596,10,8,-14.0
+ensemble,0.665,0.482,10,9,-15.6
