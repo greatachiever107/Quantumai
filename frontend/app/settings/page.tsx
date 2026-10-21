@@ -17,7 +17,7 @@ export default function Settings() {
           <div className="space-y-1 text-sm">
             <div><span className="text-mute">API: </span>{API} &mdash; <span className="text-up">{h.status}</span></div>
             <div><span className="text-mute">Data mode: </span>{h.mode}</div>
-            <div><span className="text-mute">News feed: </span>{h.news_configured ? <span className="text-up">key configured</span> : <span className="text-warn">no NEWS_API_KEY set</span>}</div>
+            <div><span className="text-mute">News feed: </span>{h.news_configured ? <span className="text-up">key configured</span> : <span className="text-warn">no key set (add FINNHUB_API_KEY)</span>}</div>
             <div><span className="text-mute">Project folder: </span>{h.project_dir}</div>
             <div className="pt-2 text-mute">Result files found:</div>
             {Object.entries(h.files_found).map(([k, v]) => (

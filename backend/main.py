@@ -12,7 +12,7 @@ import os
 import re
 import secrets
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import numpy as np
@@ -118,7 +118,7 @@ def health():
              "tracking": (T / "tracking_summary.csv").exists(),
              "model_summary": (P / "model_volatility_v3_summary.csv").exists()}
     return {"status": "ok", "project_dir": str(ROOT), "files_found": files,
-            "mode": "live-data" if files["forecast"] else "demo", "news_configured": bool(NEWS_KEY)}
+            "mode": "live-data" if files["forecast"] else "demo", "news_configured": bool(NEWS_KEY or FINNHUB_KEY)}
 
 
 @app.get("/api/v1/forecasts", response_model=ForecastsResponse)
@@ -320,16 +320,69 @@ def trend():
 
 
 # ---------------------------------------------------------------- news & sentiment
-NEWS_KEY = os.getenv("NEWS_API_KEY", "")          # free key: alphavantage.co/support
-NEWS_TTL = 3 * 3600                                # free tier allows ~25 calls/day, so cache
-_news_cache = {"at": 0.0, "tickers": "", "items": []}
+NEWS_KEY = os.getenv("NEWS_API_KEY", "")            # Alpha Vantage (its news endpoint is premium-only now)
+FINNHUB_KEY = os.getenv("FINNHUB_API_KEY", "")      # Finnhub: free plan includes company news
+_news_cache = {"at": 0.0, "key": "", "items": []}
+
+POS = set("""beat beats surge surges soar soars jump jumps rally rallies gain gains rise rises record upgrade upgrades
+raise raises raised strong growth profit profits outperform bullish boost boosts win wins approval approved expands
+expansion breakthrough higher tops topped climb climbs optimism""".split())
+NEG = set("""miss misses missed fall falls drop drops plunge plunges slump slumps tumble tumbles decline declines cut cuts
+downgrade downgrades lawsuit sue sues probe investigation recall fraud warning warns weak loss losses bearish slide
+slides sink sinks lower layoffs layoff fined ban bans delay delays fears risk crash""".split())
+
+
+def headline_tone(title):
+    """Very simple keyword tone of a headline: approximate, English only."""
+    words = re.findall(r"[a-z]+", title.lower())
+    p, n = sum(w in POS for w in words), sum(w in NEG for w in words)
+    score = round((p - n) / (p + n), 2) if p + n else 0.0
+    return ("Positive" if p > n else "Negative" if n > p else "Neutral"), score
+
+
+def finnhub_fetch(key, symbols):
+    """Finnhub GET /company-news for each symbol (one symbol per call), last 7 days."""
+    import httpx
+    to = datetime.now(timezone.utc).date()
+    out = {}
+    with httpx.Client(timeout=20, headers={"X-Finnhub-Token": key}) as c:
+        for sym in symbols:
+            r = c.get("https://finnhub.io/api/v1/company-news",
+                      params={"symbol": sym, "from": str(to - timedelta(days=7)), "to": str(to)})
+            if r.status_code == 429:
+                raise RuntimeError("rate limit reached")
+            r.raise_for_status()
+            data = r.json()
+            out[sym] = data[:15] if isinstance(data, list) else []
+    return out
+
+
+def normalise_finnhub(data):
+    merged = {}
+    for sym, arts in data.items():
+        for a in arts:
+            url, title = a.get("url"), a.get("headline")
+            if not url or not title:
+                continue
+            m = merged.get(url)
+            if m is None:
+                tone_, sc = headline_tone(title)
+                try:
+                    when = datetime.fromtimestamp(int(a["datetime"]), timezone.utc).isoformat()
+                except (KeyError, TypeError, ValueError, OSError):
+                    when = None
+                m = merged[url] = {"title": title, "url": url, "publisher": a.get("source"), "published_at": when,
+                                   "tickers": [], "sentiment": tone_, "score": sc}
+            if all(t["ticker"] != sym for t in m["tickers"]):
+                m["tickers"].append({"ticker": sym, "sentiment": m["sentiment"], "score": m["score"]})
+    return list(merged.values())
 
 
 def av_fetch(key):
-    """One Alpha Vantage NEWS_SENTIMENT call: the latest market-wide articles."""
+    """One Alpha Vantage NEWS_SENTIMENT call (premium plans only)."""
     import httpx
     r = httpx.get("https://www.alphavantage.co/query",
-                  params={"function": "NEWS_SENTIMENT", "limit": 500, "apikey": key}, timeout=30)
+                  params={"function": "NEWS_SENTIMENT", "apikey": key}, timeout=30)
     r.raise_for_status()
     return r.json()
 
@@ -340,7 +393,7 @@ def tone(label):
 
 
 def normalise_news(raw, watch):
-    """Keep articles that are clearly about a watched stock (relevance >= 0.3). Headline + link only."""
+    """Alpha Vantage: keep articles clearly about a watched stock (relevance >= 0.3). Headline + link only."""
     items = []
     for a in raw.get("feed", []) or []:
         hits = []
@@ -370,26 +423,33 @@ def normalise_news(raw, watch):
 @app.get("/api/v1/news")
 def news(ticker: str | None = None, sentiment: str | None = Query(None, pattern="^(Positive|Negative|Neutral)$"),
          limit: int = Query(40, ge=1, le=100)):
-    base = {"source": "Alpha Vantage News & Sentiment",
-            "note": "Sentiment describes the tone of each article as scored by Alpha Vantage's model. "
-                    "It is not a prediction of the stock's price."}
-    if not NEWS_KEY:
+    prov = "finnhub" if FINNHUB_KEY else "alphavantage" if NEWS_KEY else None
+    base = {"source": "Finnhub company news" if prov == "finnhub" else "Alpha Vantage News & Sentiment",
+            "note": ("Tone is a simple keyword estimate from each headline's wording (approximate, English only). "
+                     "It describes the wording of the headline, not where the price will go.") if prov == "finnhub" else
+                    "Sentiment describes the tone of each article as scored by Alpha Vantage. It is not a price prediction."}
+    if not prov:
         return {**base, "data_mode": "none", "items": [], "stale": False,
-                "note": "No news key configured. Set NEWS_API_KEY (free at alphavantage.co/support) to enable headlines."}
+                "note": "No news key configured. Set FINNHUB_API_KEY (free at finnhub.io) to enable headlines."}
     watch = sorted(set(get_watchlist().tickers) | {i.ticker for i in forecasts().items})
-    key = ",".join(watch)
+    key = prov + ":" + ",".join(watch)
+    ttl = 1800 if prov == "finnhub" else 3 * 3600
     stale = False
-    if _news_cache["tickers"] != key or time.time() - _news_cache["at"] > NEWS_TTL:
+    if _news_cache["key"] != key or time.time() - _news_cache["at"] > ttl:
         try:
-            raw = av_fetch(NEWS_KEY)
-            msg = raw.get("Information") or raw.get("Note") or raw.get("Error Message")
-            if msg and "feed" not in raw:
-                raise RuntimeError(str(msg))
-            _news_cache.update(at=time.time(), tickers=key, items=normalise_news(raw, set(watch)))
+            if prov == "finnhub":
+                fresh = normalise_finnhub(finnhub_fetch(FINNHUB_KEY, [t for t in watch if t != "SPY"][:15]))
+            else:
+                raw = av_fetch(NEWS_KEY)
+                msg = raw.get("Information") or raw.get("Note") or raw.get("Error Message")
+                if msg and "feed" not in raw:
+                    raise RuntimeError(str(msg))
+                fresh = normalise_news(raw, set(watch))
+            _news_cache.update(at=time.time(), key=key, items=fresh)
         except Exception as e:                                   # rate limit / outage: serve the last good copy
             if not _news_cache["items"]:
                 return {**base, "data_mode": "none", "items": [], "stale": False,
-                        "note": f"News provider unavailable right now ({str(e)[:120]})."}
+                        "note": f"News provider unavailable right now ({str(e)[:140]})."}
             stale = True
     items = _news_cache["items"]
     if ticker:
