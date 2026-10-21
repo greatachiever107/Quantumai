@@ -1,0 +1,16 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+node_modules/
+.next/
+.env
+.env.local
+cache_prices/
+cache_earnings/
+output/
+logs/
+data/stocks.csv
+backend/watchlist.json
+*.txt
+!requirements.txt

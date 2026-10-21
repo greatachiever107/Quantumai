@@ -1,0 +1,30 @@
+{
+  "paths": {
+    "data_dir": "data",
+    "charts_dir": "output/charts",
+    "reports_dir": "output/reports",
+    "processed_dir": "output/processed",
+    "logs_dir": "logs"
+  },
+  "analysis": {
+    "target_column": "revenue",
+    "date_column": "order_date",
+    "group_by": ["region", "category"],
+    "exclude_numeric_columns": ["order_id"],
+    "required_columns": ["order_id", "order_date", "region", "category", "units_sold", "unit_price", "revenue"],
+    "non_negative_columns": ["units_sold", "unit_price", "discount_pct", "revenue", "customer_age"],
+    "missing_numeric_strategy": "median",
+    "percentiles": [5, 25, 50, 75, 95],
+    "outlier_iqr_multiplier": 1.5,
+    "correlation_threshold": 0.5,
+    "max_file_mb": 200,
+    "chunk_rows": 50000,
+    "chart_dpi": 150
+  },
+  "experiment": {
+    "duration_hours": 6,
+    "interval_minutes": 15,
+    "force_reprocess_minutes": 60,
+    "tick_seconds": 1
+  }
+}

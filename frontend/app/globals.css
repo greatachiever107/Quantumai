@@ -1,0 +1,29 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root { /* light theme */
+  --bg: 236 241 251; --panel: 255 255 255; --line: 226 232 240; --mute: 100 116 139; --fg: 15 23 42; --fg2: 51 65 85;
+  --glow: 0.15; --up: 22 163 74; --down: 220 38 38; --ai: 124 58 237; --brand: 37 99 235; --warn: 180 83 9; --info: 2 132 199;
+}
+.dark {
+  --bg: 11 18 32; --panel: 17 26 46; --line: 31 42 68; --mute: 148 163 184; --fg: 241 245 249; --fg2: 203 213 225;
+  --glow: 0.2; --up: 34 197 94; --down: 239 68 68; --ai: 167 139 250; --brand: 37 99 235; --warn: 252 211 77; --info: 56 189 248;
+}
+body { @apply bg-bg text-fg antialiased; font-feature-settings: "cv11", "ss01"; letter-spacing: -0.005em;
+  background-image: radial-gradient(900px 420px at 18% -6%, rgb(37 99 235 / var(--glow)), transparent 70%),
+                    radial-gradient(700px 380px at 96% 0%, rgb(124 58 237 / calc(var(--glow) * 0.8)), transparent 70%);
+  background-repeat: no-repeat; background-attachment: fixed; }
+td, th, .tnum { font-variant-numeric: tabular-nums; }
+h1, h2, .font-semibold { letter-spacing: -0.015em; }
+.card { @apply bg-panel border border-line rounded-2xl p-5; position: relative; overflow: hidden;
+  background-image: linear-gradient(180deg, rgb(var(--tone, var(--brand)) / 0.07), transparent 55%);
+  box-shadow: 0 1px 2px rgb(15 23 42 / 0.05), 0 10px 28px -14px rgb(15 23 42 / 0.2); }
+.card::before { content: ""; position: absolute; inset: 0 0 auto 0; height: 3px;
+  background: linear-gradient(90deg, rgb(var(--tone, var(--brand))), rgb(var(--tone2, var(--ai)))); }
+.tone-brand { --tone: var(--brand); } .tone-info { --tone: var(--info); --tone2: var(--brand); }
+.tone-warn { --tone: var(--warn); --tone2: var(--down); } .tone-ai { --tone: var(--ai); --tone2: var(--brand); }
+.tone-up { --tone: var(--up); --tone2: var(--info); }
+tbody tr:hover { background: rgb(var(--tone, var(--brand)) / 0.06); }
+.dark .card { box-shadow: 0 10px 28px -14px rgb(0 0 0 / 0.65); }
+.th { @apply text-xs text-mute font-medium text-left pb-2; }

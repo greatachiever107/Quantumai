@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: stockai-api
+    runtime: python
+    plan: free
+    buildCommand: pip install -r backend/requirements.txt
+    startCommand: uvicorn backend.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/v1/health
+    envVars:
+      - key: PROJECT_DIR
+        value: /opt/render/project/src/snapshot
+      - key: CORS_ORIGINS
+        sync: false          # your Vercel URL, e.g. https://stockai.vercel.app
+      - key: ACCESS_KEY
+        sync: false          # a long random passphrase
