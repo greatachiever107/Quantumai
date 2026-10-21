@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import Shell from "@/components/Shell";
 import { API, get } from "@/lib/api";
 
-type Health = { status: string; project_dir: string; files_found: Record<string, boolean>; mode: string };
+type Health = { status: string; project_dir: string; files_found: Record<string, boolean>; mode: string; news_configured?: boolean };
 
 export default function Settings() {
   const [h, setH] = useState<Health | null>(null);
@@ -17,6 +17,7 @@ export default function Settings() {
           <div className="space-y-1 text-sm">
             <div><span className="text-mute">API: </span>{API} &mdash; <span className="text-up">{h.status}</span></div>
             <div><span className="text-mute">Data mode: </span>{h.mode}</div>
+            <div><span className="text-mute">News feed: </span>{h.news_configured ? <span className="text-up">key configured</span> : <span className="text-warn">no NEWS_API_KEY set</span>}</div>
             <div><span className="text-mute">Project folder: </span>{h.project_dir}</div>
             <div className="pt-2 text-mute">Result files found:</div>
             {Object.entries(h.files_found).map(([k, v]) => (

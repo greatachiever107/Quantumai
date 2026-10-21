@@ -5,7 +5,8 @@ import type { LucideIcon } from "lucide-react";
 import Chart from "@/components/Chart";
 import Title from "@/components/Title";
 import Shell from "@/components/Shell";
-import { Candle, CandlesResp, Forecast, ForecastsResp, ListResp, Row, get, put } from "@/lib/api";
+import NewsList from "@/components/NewsList";
+import { Candle, CandlesResp, Forecast, ForecastsResp, ListResp, NewsResp, Row, get, put } from "@/lib/api";
 
 const RANGES = ["1M", "3M", "6M", "1Y", "5Y"];
 const REGIME: Record<string, string> = {
@@ -48,6 +49,7 @@ export default function Dashboard() {
   const [sma50, setSma50] = useState(true);
   const [add, setAdd] = useState("");
   const [tr, setTr] = useState<Record<string, Row>>({});
+  const [news, setNews] = useState<NewsResp | null>(null);
 
   useEffect(() => {
     Promise.all([
@@ -59,6 +61,8 @@ export default function Dashboard() {
       if (f.items.length && !f.items.some((i) => i.ticker === "TSLA")) setSel(f.items[0].ticker);
     }).catch((e) => setErr(`Cannot reach the API (${e.message}). Is the backend running on port 8000?`));
   }, []);
+
+  useEffect(() => { get<NewsResp>("/news?limit=5").then(setNews).catch(() => {}); }, []);
 
   useEffect(() => {
     setLoading(true); setCErr("");
@@ -194,7 +198,9 @@ export default function Dashboard() {
           <div className="mt-2 text-xs text-mute">&ldquo;live&rdquo; = saved in real time; &ldquo;backfill&rdquo; = rebuilt from past data (not a live record).</div>
         </div>
         <div className="card tone-info"><Title icon={Newspaper} tone="info">News &amp; sentiment</Title>
-          <div className="text-sm text-mute">No news provider connected, so nothing is shown. Headlines will appear here once a licensed news source is configured.</div></div>
+          {news && news.items.length > 0 ? <NewsList items={news.items} compact />
+            : <div className="text-sm text-mute">{news ? news.note : "Loading headlines..."}</div>}
+          <a href="/news" className="mt-3 block text-xs font-medium text-brand hover:underline">All news &rarr;</a></div>
       </div>
     </Shell>
   );

@@ -106,3 +106,45 @@ def test_access_key_gate(tmp_path, monkeypatch):
     monkeypatch.delenv("ACCESS_KEY")
     c, _ = client(tmp_path)
     assert c.get("/api/v1/forecasts").status_code == 200               # no key set = open (local use)
+
+
+RAW_NEWS = {"feed": [
+    {"title": "Apple beats", "url": "https://x.test/a", "source": "Wire", "time_published": "20260102T153000",
+     "overall_sentiment_score": 0.31, "overall_sentiment_label": "Somewhat-Bullish",
+     "ticker_sentiment": [{"ticker": "AAPL", "relevance_score": "0.9", "ticker_sentiment_score": "0.4", "ticker_sentiment_label": "Bullish"}]},
+    {"title": "Chip supply worries", "url": "https://x.test/b", "source": "Daily", "time_published": "20260103T090000",
+     "overall_sentiment_score": -0.3, "overall_sentiment_label": "Somewhat-Bearish",
+     "ticker_sentiment": [{"ticker": "NVDA", "relevance_score": "0.8", "ticker_sentiment_score": "-0.35", "ticker_sentiment_label": "Somewhat-Bearish"},
+                          {"ticker": "MSFT", "relevance_score": "0.1", "ticker_sentiment_score": "0.0", "ticker_sentiment_label": "Neutral"}]},
+    {"title": "Unrelated company", "url": "https://x.test/c", "source": "Daily", "time_published": "20260103T100000",
+     "overall_sentiment_score": 0.0, "overall_sentiment_label": "Neutral",
+     "ticker_sentiment": [{"ticker": "ZZZZ", "relevance_score": "0.9", "ticker_sentiment_score": "0", "ticker_sentiment_label": "Neutral"}]}]}
+
+
+def test_news_none_without_key_and_normalised_with_key(tmp_path, monkeypatch):
+    monkeypatch.delenv("NEWS_API_KEY", raising=False)
+    c, _ = client(tmp_path)
+    j = c.get("/api/v1/news").json()
+    assert j["data_mode"] == "none" and j["items"] == [] and "NEWS_API_KEY" in j["note"]      # never invented
+    monkeypatch.setenv("NEWS_API_KEY", "k")
+    c, m = client(tmp_path)
+    monkeypatch.setattr(m, "av_fetch", lambda key: RAW_NEWS)
+    j = c.get("/api/v1/news").json()
+    titles = [i["title"] for i in j["items"]]
+    assert titles == ["Chip supply worries", "Apple beats"]                    # newest first; irrelevant + low-relevance dropped
+    assert j["items"][0]["tickers"] == [{"ticker": "NVDA", "sentiment": "Negative", "score": -0.35}]
+    assert j["items"][1]["sentiment"] == "Positive" and j["items"][1]["published_at"].startswith("2026-01-02T15:30")
+    assert [i["title"] for i in c.get("/api/v1/news?ticker=aapl").json()["items"]] == ["Apple beats"]
+    assert [i["title"] for i in c.get("/api/v1/news?sentiment=Negative").json()["items"]] == ["Chip supply worries"]
+    assert c.get("/api/v1/news?sentiment=Bogus").status_code == 422
+
+
+def test_news_rate_limit_serves_stale_copy(tmp_path, monkeypatch):
+    monkeypatch.setenv("NEWS_API_KEY", "k")
+    c, m = client(tmp_path)
+    monkeypatch.setattr(m, "av_fetch", lambda key: RAW_NEWS)
+    assert len(c.get("/api/v1/news").json()["items"]) == 2
+    m._news_cache["at"] = 0                                                    # expire the cache
+    monkeypatch.setattr(m, "av_fetch", lambda key: {"Information": "rate limit reached"})
+    j = c.get("/api/v1/news").json()
+    assert j["stale"] is True and len(j["items"]) == 2

@@ -30,3 +30,10 @@ export async function put<T>(path: string, body: unknown): Promise<T> {
   check(r, path);
   return r.json();
 }
+
+export type NewsTicker = { ticker: string; sentiment: string; score: number };
+export type NewsItem = {
+  title: string; url: string; publisher: string | null; published_at: string | null;
+  tickers: NewsTicker[]; sentiment: string; score: number | null;
+};
+export type NewsResp = { data_mode: string; source: string; note: string; stale: boolean; fetched_at?: string; items: NewsItem[] };

@@ -11,6 +11,8 @@ import json
 import os
 import re
 import secrets
+import time
+from datetime import datetime, timezone
 from pathlib import Path
 
 import numpy as np
@@ -116,7 +118,7 @@ def health():
              "tracking": (T / "tracking_summary.csv").exists(),
              "model_summary": (P / "model_volatility_v3_summary.csv").exists()}
     return {"status": "ok", "project_dir": str(ROOT), "files_found": files,
-            "mode": "live-data" if files["forecast"] else "demo"}
+            "mode": "live-data" if files["forecast"] else "demo", "news_configured": bool(NEWS_KEY)}
 
 
 @app.get("/api/v1/forecasts", response_model=ForecastsResponse)
@@ -315,6 +317,91 @@ def trend():
     return {"data_mode": "live-data" if items else "none",
             "note": "Describes where the price has been. It is not a forecast of where it is going.",
             "items": items}
+
+
+# ---------------------------------------------------------------- news & sentiment
+NEWS_KEY = os.getenv("NEWS_API_KEY", "")          # free key: alphavantage.co/support
+NEWS_TTL = 3 * 3600                                # free tier allows ~25 calls/day, so cache
+_news_cache = {"at": 0.0, "tickers": "", "items": []}
+
+
+def av_fetch(key):
+    """One Alpha Vantage NEWS_SENTIMENT call: the latest market-wide articles."""
+    import httpx
+    r = httpx.get("https://www.alphavantage.co/query",
+                  params={"function": "NEWS_SENTIMENT", "limit": 500, "apikey": key}, timeout=30)
+    r.raise_for_status()
+    return r.json()
+
+
+def tone(label):
+    s = (label or "").lower()
+    return "Positive" if "bull" in s else "Negative" if "bear" in s else "Neutral"
+
+
+def normalise_news(raw, watch):
+    """Keep articles that are clearly about a watched stock (relevance >= 0.3). Headline + link only."""
+    items = []
+    for a in raw.get("feed", []) or []:
+        hits = []
+        for ts in a.get("ticker_sentiment", []) or []:
+            try:
+                rel = float(ts.get("relevance_score", 0))
+                sc = float(ts.get("ticker_sentiment_score", 0))
+            except (TypeError, ValueError):
+                continue
+            if ts.get("ticker") in watch and rel >= 0.3:
+                hits.append({"ticker": ts["ticker"], "sentiment": tone(ts.get("ticker_sentiment_label")), "score": round(sc, 3)})
+        if not hits or not a.get("title") or not a.get("url"):
+            continue
+        try:
+            when = datetime.strptime(a["time_published"], "%Y%m%dT%H%M%S").replace(tzinfo=timezone.utc).isoformat()
+        except (KeyError, ValueError):
+            when = None
+        try:
+            overall = round(float(a.get("overall_sentiment_score")), 3)
+        except (TypeError, ValueError):
+            overall = None
+        items.append({"title": a["title"], "url": a["url"], "publisher": a.get("source"), "published_at": when,
+                      "tickers": hits, "sentiment": tone(a.get("overall_sentiment_label")), "score": overall})
+    return items
+
+
+@app.get("/api/v1/news")
+def news(ticker: str | None = None, sentiment: str | None = Query(None, pattern="^(Positive|Negative|Neutral)$"),
+         limit: int = Query(40, ge=1, le=100)):
+    base = {"source": "Alpha Vantage News & Sentiment",
+            "note": "Sentiment describes the tone of each article as scored by Alpha Vantage's model. "
+                    "It is not a prediction of the stock's price."}
+    if not NEWS_KEY:
+        return {**base, "data_mode": "none", "items": [], "stale": False,
+                "note": "No news key configured. Set NEWS_API_KEY (free at alphavantage.co/support) to enable headlines."}
+    watch = sorted(set(get_watchlist().tickers) | {i.ticker for i in forecasts().items})
+    key = ",".join(watch)
+    stale = False
+    if _news_cache["tickers"] != key or time.time() - _news_cache["at"] > NEWS_TTL:
+        try:
+            raw = av_fetch(NEWS_KEY)
+            msg = raw.get("Information") or raw.get("Note") or raw.get("Error Message")
+            if msg and "feed" not in raw:
+                raise RuntimeError(str(msg))
+            _news_cache.update(at=time.time(), tickers=key, items=normalise_news(raw, set(watch)))
+        except Exception as e:                                   # rate limit / outage: serve the last good copy
+            if not _news_cache["items"]:
+                return {**base, "data_mode": "none", "items": [], "stale": False,
+                        "note": f"News provider unavailable right now ({str(e)[:120]})."}
+            stale = True
+    items = _news_cache["items"]
+    if ticker:
+        t = ticker.upper()
+        items = [{**i, "sentiment": next(x["sentiment"] for x in i["tickers"] if x["ticker"] == t),
+                  "score": next(x["score"] for x in i["tickers"] if x["ticker"] == t)}
+                 for i in items if any(x["ticker"] == t for x in i["tickers"])]
+    if sentiment:
+        items = [i for i in items if i["sentiment"] == sentiment]
+    items = sorted(items, key=lambda i: i["published_at"] or "", reverse=True)[:limit]
+    return {**base, "data_mode": "live-data", "stale": stale,
+            "fetched_at": datetime.fromtimestamp(_news_cache["at"], timezone.utc).isoformat(), "items": items}
 
 
 class Watchlist(BaseModel):
