@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ReactNode, useState } from "react";
-import { Activity, BarChart3, Cpu, FlaskConical, LayoutDashboard, Moon, Newspaper, Search, Settings, Star, Sun, TrendingUp, Wallet } from "lucide-react";
+import { Activity, BarChart3, Cpu, FlaskConical, LayoutDashboard, Menu, Moon, Newspaper, Search, Settings, Star, Sun, TrendingUp, Wallet, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useTheme } from "@/lib/theme";
 
@@ -22,6 +22,7 @@ export default function Shell({ children, mode, asOf, tickers = [], onPick = () 
   children: ReactNode; mode: string; asOf: string | null; tickers?: string[]; onPick?: (t: string) => void;
 }) {
   const [q, setQ] = useState("");
+  const [open, setOpen] = useState(false);
   const path = usePathname();
   const theme = useTheme();
   const toggle = () => {
@@ -53,8 +54,23 @@ export default function Shell({ children, mode, asOf, tickers = [], onPick = () 
         </div>
       </aside>
       <div className="min-w-0 flex-1">
-        <header className="flex flex-wrap items-center gap-3 border-b border-line bg-panel/60 px-6 py-3 backdrop-blur">
-          <div className="relative w-72">
+        <header className="flex flex-wrap items-center gap-3 border-b border-line bg-panel/60 px-4 py-3 backdrop-blur md:px-6">
+          <div className="flex w-full items-center justify-between md:hidden">
+            <div className="flex items-center gap-2">
+              <div className="grid h-8 w-8 place-items-center rounded-lg bg-gradient-to-br from-brand to-ai text-white"><Activity className="h-4 w-4" /></div>
+              <div className="text-lg font-bold">Stock<span className="text-brand">AI</span></div>
+            </div>
+            <button onClick={() => setOpen(!open)} aria-label="Menu" className="grid h-9 w-9 place-items-center rounded-xl border border-line bg-panel">
+              {open ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
+            </button>
+          </div>
+          {open && (
+            <nav className="w-full space-y-1 md:hidden">
+              {NAV.map(([n, href, Icon]) => (
+                <Link key={n} href={href} onClick={() => setOpen(false)} className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium ${path === href ? "bg-gradient-to-r from-brand to-ai text-white" : "text-fg2 hover:bg-fg/5"}`}>
+                  <Icon className="h-[18px] w-[18px]" />{n}</Link>))}
+            </nav>)}
+          <div className="relative w-full sm:w-72">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-mute" />
             <input list="tk" value={q} onChange={(e) => setQ(e.target.value.toUpperCase())}
               onKeyDown={(e) => { if (e.key === "Enter" && q) { onPick(q); setQ(""); } }}
@@ -65,15 +81,17 @@ export default function Shell({ children, mode, asOf, tickers = [], onPick = () 
           <div className="ml-auto flex items-center gap-3 text-xs">
             {mode === "demo"
               ? <span className="rounded-full bg-warn/20 px-3 py-1 font-semibold text-warn">DEMO DATA - not real</span>
+              : mode === ""
+              ? <span className="flex items-center gap-1.5 rounded-full bg-warn/15 px-3 py-1 font-medium text-warn"><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-warn" />Waiting for data...</span>
               : <span className="flex items-center gap-1.5 rounded-full bg-up/15 px-3 py-1 font-medium text-up"><span className="h-1.5 w-1.5 rounded-full bg-up" />Project data</span>}
-            <span className="hidden text-mute sm:inline">{asOf ? `Prices through ${asOf} (end of day)` : ""}</span>
+            <span className="text-mute">{asOf ? `Prices through ${asOf} (end of day)` : ""}</span>
             <button onClick={toggle} aria-label="Toggle light or dark theme"
               className="grid h-9 w-9 place-items-center rounded-xl border border-line bg-panel text-fg2 hover:bg-fg/5">
               {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </button>
           </div>
         </header>
-        <main className="space-y-5 p-6">
+        <main className="space-y-5 p-4 md:p-6">
           <div><h1 className="text-2xl font-bold tracking-tight">{cur[0]}</h1><p className="mt-0.5 text-sm text-mute">{cur[3]}</p></div>
           {children}
         </main>

@@ -84,6 +84,7 @@ export default function Dashboard() {
   return (
     <Shell mode={fc?.data_mode ?? ""} asOf={fc?.as_of ?? null} tickers={items.map((i) => i.ticker)} onPick={setSel}>
       {err && <div className="card border-down text-down">{err}</div>}
+      {!fc && !err && <div className="card tone-warn text-sm text-fg2">Loading your data... the free server sleeps when idle and can take up to a minute to wake up.</div>}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <StatCard icon={Gauge} tone="brand" label="Highest expected risk" value={top?.ticker ?? "-"}
           sub={top ? `${top.forecast_vol_ann_pct}% annualized` : ""} />
