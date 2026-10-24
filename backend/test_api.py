@@ -168,3 +168,69 @@ def test_finnhub_news_merged_toned_and_ordered(tmp_path, monkeypatch):
     assert top["Lawsuit risk grows for Apple"]["sentiment"] == "Negative"
     assert top["Apple stock surges after strong results"]["published_at"].startswith("2026-01-02")
     assert [i["title"] for i in c.get("/api/v1/news?ticker=MSFT").json()["items"]] == ["Apple stock surges after strong results"]
+
+
+def test_funds_are_flagged(tmp_path):
+    (tmp_path / "output/processed").mkdir(parents=True)
+    pd.DataFrame({"Ticker": ["TSLA", "QQQ"], "recent_20d_vol_ann_pct": [30.0, 15.0], "forecast_5d_vol_ann_pct": [45.0, 17.0],
+                  "forecast_vs_recent_pct": [50.0, 13.0], "typical_daily_move_pct": [2.8, 1.1],
+                  "earnings_in_window": [True, False]}).to_csv(tmp_path / "output/processed/volatility_forecast.csv", index=False)
+    c, _ = client(tmp_path)
+    flags = {i["ticker"]: i["is_fund"] for i in c.get("/api/v1/forecasts").json()["items"]}
+    assert flags == {"TSLA": False, "QQQ": True}
+
+
+def test_indicators_math_and_endpoint(tmp_path):
+    import numpy as np
+    from backend import indicators as ind
+    n = 120
+    up = pd.Series([100.0 + i for i in range(n)])
+    r = ind.compute(up, up + 1, up - 1)
+    assert r["rsi14"] == 100.0 and r["macd_hist"] is not None and r["atr14"] == pytest_approx(2.0)
+    assert r["sma20"] == pytest_approx(up.tail(20).mean(), 1e-6) and r["bollinger_pct_b"] > 0.9
+    flat = pd.Series([50.0] * n)
+    assert ind.compute(flat, flat, flat)["bollinger_pct_b"] is None            # zero-width bands: no divide-by-zero
+    (tmp_path / "data").mkdir()
+    pd.DataFrame({"Date": pd.bdate_range("2025-01-01", periods=n), "Open": up, "High": up + 1, "Low": up - 1,
+                  "Close": up, "Volume": 1, "Ticker": "UP", "daily_return_pct": 0.1}).to_csv(tmp_path / "data/stocks.csv", index=False)
+    c, _ = client(tmp_path)
+    j = c.get("/api/v1/indicators/up").json()
+    assert j["rsi14"] == 100.0 and "not trading signals" in j["note"] and j["frequency"] == "end-of-day"
+    assert c.get("/api/v1/indicators/NOPE").status_code == 404
+
+
+def pytest_approx(v, rel=1e-3):
+    import pytest
+    return pytest.approx(v, rel=rel)
+
+
+def test_sources_and_labels(tmp_path):
+    c, _ = client(tmp_path)
+    j = c.get("/api/v1/sources").json()
+    ids = {i["id"] for i in j["items"]}
+    assert {"yfinance", "nse", "local"} <= ids
+    assert next(i for i in j["items"] if i["id"] == "nse")["redistribution"].startswith("No")
+    f = c.get("/api/v1/forecasts").json()
+    assert f["frequency"] == "simulated" and "DEMO" in f["price_source"]       # demo is never labelled end-of-day
+
+
+def test_kes_rates_parse_and_degrade(tmp_path, monkeypatch):
+    c, m = client(tmp_path)
+    listshape = [{"date": "2026-10-21", "base": "KES", "quote": "USD", "rate": 0.0077},
+                 {"date": "2026-10-21", "base": "KES", "quote": "EUR", "rate": 0.0066}]
+    monkeypatch.setattr(m, "frankfurter_cbk", lambda: listshape)
+    j = c.get("/api/v1/fx/kes").json()
+    usd = next(i for i in j["items"] if i["currency"] == "USD")
+    assert j["data_mode"] == "live-data" and abs(usd["kes_per_unit"] - 129.8701) < 0.01
+    assert m.parse_kes({"base": "USD", "date": "2026-10-21", "rates": {"KES": 129.0}})[0]["kes_per_unit"] == 129.0
+    m._kes["at"] = 0
+    monkeypatch.setattr(m, "frankfurter_cbk", lambda: (_ for _ in ()).throw(RuntimeError("down")))
+    assert c.get("/api/v1/fx/kes").json()["stale"] is True                      # serves last good copy
+    m._kes.update(at=0, items=[])
+    assert c.get("/api/v1/fx/kes").json()["data_mode"] == "none"                # never invents a rate
+
+
+def test_news_summary_is_rule_based():
+    from backend.main import news_summary
+    s = news_summary([{"sentiment": "Positive", "tickers": [{"ticker": "AAPL"}]}, {"sentiment": "Negative", "tickers": [{"ticker": "AAPL"}, {"ticker": "TSLA"}]}])
+    assert "2 headlines: 1 positive, 1 negative" in s and "AAPL (2)" in s

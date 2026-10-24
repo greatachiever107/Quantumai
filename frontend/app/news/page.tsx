@@ -33,6 +33,7 @@ export default function News() {
         {!d && !err && <div className="text-sm text-mute">Loading headlines...</div>}
         {d && d.data_mode === "none" && <div className="text-sm text-fg2">{d.note}</div>}
         {d && d.data_mode !== "none" && rows.length === 0 && <div className="text-sm text-mute">No articles match these filters right now.</div>}
+        {d && d.summary && d.data_mode !== "none" && <div className="mb-3 rounded-xl bg-fg/5 px-3 py-2 text-sm text-fg2">{d.summary}</div>}
         {rows.length > 0 && <NewsList items={rows} />}
         {d && d.data_mode !== "none" && (
           <div className="mt-4 border-t border-line pt-3 text-xs text-mute">

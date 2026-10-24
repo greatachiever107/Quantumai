@@ -22,9 +22,13 @@ from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
+from backend import indicators as ind
+from backend.sources import SOURCES
+
 ROOT = Path(os.getenv("PROJECT_DIR", Path(__file__).resolve().parent.parent))
 P, T = ROOT / "output/processed", ROOT / "output/tracking"
 WL_FILE = ROOT / "backend/watchlist.json"
+FUNDS = {"QQQ", "SPY"}                       # ETFs: not stocks (no earnings, excluded from portfolio sizing)
 DEFAULT_WL = ["AAPL", "MSFT", "NVDA", "AMZN", "TSLA", "JPM", "V", "WMT", "XOM", "JNJ"]
 RANGES = {"1M": 21, "3M": 63, "6M": 126, "1Y": 252, "5Y": 1260, "ALL": None}
 
@@ -60,9 +64,12 @@ class Forecast(BaseModel):
     earnings_in_window: bool
     next_earnings: str | None = None
     regime: str | None = None          # Calm / Normal / Elevated / High (vs the stock's own history)
+    is_fund: bool = False
 
 
 class ForecastsResponse(BaseModel):
+    frequency: str = "end-of-day"
+    price_source: str = "Yahoo Finance via yfinance (private use only)"
     data_mode: str
     as_of: str | None
     horizon_trading_days: int = 5
@@ -80,6 +87,8 @@ class Candle(BaseModel):
 
 
 class CandlesResponse(BaseModel):
+    frequency: str = "end-of-day"
+    source: str = "Yahoo Finance via yfinance (private use only)"
     data_mode: str
     ticker: str
     candles: list[Candle]
@@ -135,7 +144,7 @@ def forecasts():
                                   change_pct=round((fc / rec - 1) * 100, 1),
                                   typical_daily_move_pct=round(fc / 15.87, 2),
                                   earnings_in_window=False, regime="Normal"))
-        return ForecastsResponse(data_mode="demo", as_of=None, items=items,
+        return ForecastsResponse(data_mode="demo", as_of=None, items=items, frequency="simulated", price_source="DEMO sample data",
                                  note="DEMO DATA: random sample values, not real forecasts. "
                                       "Run volatility_chart.py to see real ones.")
     px = prices()
@@ -145,7 +154,7 @@ def forecasts():
         typical_daily_move_pct=r["typical_daily_move_pct"],
         earnings_in_window=bool(r.get("earnings_in_window", False)),
         next_earnings=None if pd.isna(r.get("next_earnings")) else str(r["next_earnings"]),
-        regime=regime(r["Ticker"], r["typical_daily_move_pct"], px))
+        regime=regime(r["Ticker"], r["typical_daily_move_pct"], px), is_fund=r["Ticker"] in FUNDS)
         for _, r in f.iterrows()]
     as_of = str(px["Date"].max().date()) if px is not None else None
     return ForecastsResponse(
@@ -174,7 +183,8 @@ def candles(ticker: str, range: str = Query("1Y", pattern="^(1M|3M|6M|1Y|5Y|ALL)
         mode = "live-data"
     if RANGES[range]:
         d = d.tail(RANGES[range])
-    return CandlesResponse(data_mode=mode, ticker=t, candles=[
+    return CandlesResponse(data_mode=mode, ticker=t, frequency="simulated" if mode == "demo" else "end-of-day",
+                           source="DEMO sample data" if mode == "demo" else "Yahoo Finance via yfinance (private use only)", candles=[
         Candle(date=r.Date, open=r.Open, high=r.High, low=r.Low, close=r.Close,
                volume=None if "Volume" not in d or pd.isna(r.Volume) else r.Volume)
         for r in d.itertuples()])
@@ -275,6 +285,9 @@ def overview():
     if len(spy):
         spy_vol = round(float(spy.iloc[-1]) * 252 ** 0.5, 1)
         spy_reg = regime("SPY", float(spy.iloc[-1]), px)
+    qqq = px[px["Ticker"] == "QQQ"].sort_values("Date")["daily_return_pct"].rolling(20).std().dropna()
+    qqq_vol = round(float(qqq.iloc[-1]) * 252 ** 0.5, 1) if len(qqq) else None
+    qqq_reg = regime("QQQ", float(qqq.iloc[-1]), px) if len(qqq) else None
     groups = {}
     for it in f.items:
         groups.setdefault(sec.get(it.ticker, "Other"), []).append(it)
@@ -282,6 +295,7 @@ def overview():
     for it in f.items:
         counts[it.regime or "Unknown"] = counts.get(it.regime or "Unknown", 0) + 1
     return {"data_mode": "live-data", "as_of": f.as_of, "spy_recent_vol_ann_pct": spy_vol, "spy_regime": spy_reg,
+            "qqq_recent_vol_ann_pct": qqq_vol, "qqq_regime": qqq_reg,
             "regime_counts": counts, "rising": sum(i.change_pct > 0 for i in f.items),
             "falling": sum(i.change_pct <= 0 for i in f.items),
             "earnings_in_window": [i.ticker for i in f.items if i.earnings_in_window],
@@ -420,6 +434,20 @@ def normalise_news(raw, watch):
     return items
 
 
+def news_summary(items):
+    """Rule-based summary computed locally from the headlines (no AI service)."""
+    if not items:
+        return "No headlines in the selected window."
+    tones = {k: sum(i["sentiment"] == k for i in items) for k in ("Positive", "Negative", "Neutral")}
+    counts = {}
+    for i in items:
+        for t in i["tickers"]:
+            counts[t["ticker"]] = counts.get(t["ticker"], 0) + 1
+    top = ", ".join(f"{k} ({v})" for k, v in sorted(counts.items(), key=lambda kv: -kv[1])[:3])
+    return (f"{len(items)} headlines: {tones['Positive']} positive, {tones['Negative']} negative, {tones['Neutral']} neutral "
+            f"(keyword estimate). Most covered: {top}.")
+
+
 @app.get("/api/v1/news")
 def news(ticker: str | None = None, sentiment: str | None = Query(None, pattern="^(Positive|Negative|Neutral)$"),
          limit: int = Query(40, ge=1, le=100)):
@@ -460,8 +488,101 @@ def news(ticker: str | None = None, sentiment: str | None = Query(None, pattern=
     if sentiment:
         items = [i for i in items if i["sentiment"] == sentiment]
     items = sorted(items, key=lambda i: i["published_at"] or "", reverse=True)[:limit]
-    return {**base, "data_mode": "live-data", "stale": stale,
+    return {**base, "data_mode": "live-data", "stale": stale, "summary": news_summary(items),
             "fetched_at": datetime.fromtimestamp(_news_cache["at"], timezone.utc).isoformat(), "items": items}
+
+
+# ---------------------------------------------------------------- indicators, sources, KES rates
+@app.get("/api/v1/indicators/{ticker}")
+def indicators_for(ticker: str):
+    px = prices()
+    t = ticker.upper()
+    if px is None:
+        return {"data_mode": "none", "ticker": t, "note": "No price data available."}
+    d = px[px["Ticker"] == t].sort_values("Date")
+    if len(d) < 60 or not {"High", "Low", "Close"} <= set(d.columns):
+        raise HTTPException(404, f"Not enough price history for {t}")
+    out = ind.compute(d["Close"].reset_index(drop=True), d["High"].reset_index(drop=True), d["Low"].reset_index(drop=True))
+    return {"data_mode": "live-data", "ticker": t, "as_of": str(d["Date"].max().date()), "frequency": "end-of-day",
+            "note": "Descriptive summaries of past prices computed locally. They are not trading signals.", **out}
+
+
+@app.get("/api/v1/sources")
+def sources():
+    return {"note": "Where each piece of data comes from, its limits and whether it may be redistributed publicly.",
+            "configured": {"finnhub": bool(FINNHUB_KEY), "alphavantage": bool(NEWS_KEY)}, "items": SOURCES}
+
+
+KES_TTL = 6 * 3600
+_kes = {"at": 0.0, "items": [], "raw": None}
+
+
+def frankfurter_cbk():
+    """Latest Central Bank of Kenya indicative rates through the free Frankfurter API."""
+    import httpx
+    r = httpx.get("https://api.frankfurter.dev/v2/providers/cbk/rates", timeout=20)
+    r.raise_for_status()
+    return r.json()
+
+
+def parse_kes(raw):
+    """Normalise to KES per 1 unit of foreign currency. Accepts the list and the dict response shapes."""
+    if isinstance(raw, list):
+        items = raw
+    elif isinstance(raw, dict) and isinstance(raw.get("rates"), list):
+        items = raw["rates"]
+    elif isinstance(raw, dict) and isinstance(raw.get("rates"), dict):
+        items = [{"date": raw.get("date"), "base": raw.get("base"), "quote": k, "rate": v}
+                 for k, v in raw["rates"].items() if not isinstance(v, dict)]
+    else:
+        items = []
+    out = {}
+    for it in items:
+        if not isinstance(it, dict):
+            continue
+        base = str(it.get("base") or "").upper()
+        quote = str(it.get("quote") or it.get("target") or it.get("currency") or "").upper()
+        try:
+            rate = float(it.get("rate"))
+        except (TypeError, ValueError):
+            continue
+        if rate <= 0:
+            continue
+        if base == "KES" and quote and quote != "KES":
+            cur, kes = quote, 1 / rate
+        elif quote == "KES" and base:
+            cur, kes = base, rate
+        else:
+            continue
+        out[cur] = {"currency": cur, "kes_per_unit": round(kes, 4), "date": it.get("date")}
+    return sorted(out.values(), key=lambda x: x["currency"])
+
+
+@app.get("/api/v1/fx/kes")
+def fx_kes():
+    base = {"source": "Central Bank of Kenya indicative rates via the Frankfurter API", "frequency": "end-of-day (daily indicative)",
+            "note": "Indicative rates, not executable broker quotes."}
+    if time.time() - _kes["at"] > KES_TTL:
+        try:
+            raw = frankfurter_cbk()
+            items = parse_kes(raw)
+            if not items:
+                raise RuntimeError("response format not recognised - see /api/v1/fx/kes/raw")
+            _kes.update(at=time.time(), items=items, raw=raw)
+        except Exception as e:
+            if not _kes["items"]:
+                return {**base, "data_mode": "none", "items": [], "note": f"KES rates unavailable right now ({str(e)[:120]})."}
+            return {**base, "data_mode": "live-data", "stale": True, "items": _kes["items"]}
+    return {**base, "data_mode": "live-data", "stale": False, "items": _kes["items"]}
+
+
+@app.get("/api/v1/fx/kes/raw")
+def fx_kes_raw():
+    """Debug helper: the provider's raw response (truncated), to verify the parser."""
+    try:
+        return {"raw": json.dumps(frankfurter_cbk())[:4000]}
+    except Exception as e:
+        return {"error": str(e)[:300]}
 
 
 class Watchlist(BaseModel):

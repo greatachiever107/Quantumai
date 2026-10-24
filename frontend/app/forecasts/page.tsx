@@ -49,7 +49,7 @@ export default function Forecasts() {
           </tr></thead><tbody>
             {rows.map((f) => (
               <tr key={f.ticker} className="border-t border-line">
-                <td className="py-2 font-medium">{f.ticker}{f.earnings_in_window && <span className="ml-1 text-warn">&#9733;</span>}</td>
+                <td className="py-2 font-medium">{f.ticker}{f.is_fund && <span className="ml-1.5 rounded bg-ai/15 px-1.5 py-0.5 text-[10px] font-semibold text-ai">ETF</span>}{f.earnings_in_window && <span className="ml-1 text-warn">&#9733;</span>}</td>
                 <td>{f.recent_vol_ann_pct}</td><td>{f.forecast_vol_ann_pct}</td>
                 <td className="text-info">{pct(f.change_pct)}</td>
                 <td>{f.typical_daily_move_pct}</td><td><Badge r={f.regime} /></td><td>{f.next_earnings ?? "-"}</td>

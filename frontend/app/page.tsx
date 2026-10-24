@@ -50,6 +50,8 @@ export default function Dashboard() {
   const [add, setAdd] = useState("");
   const [tr, setTr] = useState<Record<string, Row>>({});
   const [news, setNews] = useState<NewsResp | null>(null);
+  const [ix, setIx] = useState<Record<string, string | number | null> | null>(null);
+  const [cSrc, setCSrc] = useState("");
 
   useEffect(() => {
     Promise.all([
@@ -63,11 +65,12 @@ export default function Dashboard() {
   }, []);
 
   useEffect(() => { get<NewsResp>("/news?limit=5").then(setNews).catch(() => {}); }, []);
+  useEffect(() => { setIx(null); get<Record<string, string | number | null>>(`/indicators/${sel}`).then(setIx).catch(() => setIx(null)); }, [sel]);
 
   useEffect(() => {
     setLoading(true); setCErr("");
     get<CandlesResp>(`/candles/${sel}?range=${range}`)
-      .then((r) => { setCandles(r.candles); setCMode(r.data_mode); })
+      .then((r) => { setCandles(r.candles); setCMode(r.data_mode); setCSrc(`${r.frequency ?? ""} - ${r.source ?? ""}`); })
       .catch((e) => { setCandles([]); setCErr(e.message); })
       .finally(() => setLoading(false));
   }, [sel, range]);
@@ -105,6 +108,7 @@ export default function Dashboard() {
           <div className="mb-2 flex flex-wrap items-center gap-2">
             <div className="text-lg font-semibold">{sel}</div>
             {cMode === "demo" && <span className="rounded bg-warn/20 px-2 py-0.5 text-xs text-warn">DEMO prices</span>}
+            {cSrc && <span className="text-xs text-mute">{cSrc}</span>}
             <div className="ml-auto flex gap-1">
               {RANGES.map((r) => (
                 <button key={r} onClick={() => setRange(r)}
@@ -144,6 +148,15 @@ export default function Dashboard() {
                     <span className={v > 0 ? "text-up" : v < 0 ? "text-down" : ""}>{v > 0 ? "+" : ""}{v}%</span></div>);
                 })}
                 <div className="mt-1 text-xs text-mute">Describes where the price has been. It is not a forecast of direction.</div>
+              </div>)}
+            {ix && ix.rsi14 != null && (
+              <div className="mt-4 border-t border-line pt-3 text-sm">
+                <div className="mb-1 font-semibold">Indicators (computed locally)</div>
+                <div className="flex justify-between"><span className="text-mute">RSI (14)</span><span>{ix.rsi14} <span className="text-xs text-mute">{String(ix.rsi_zone)}</span></span></div>
+                <div className="flex justify-between"><span className="text-mute">MACD</span><span className="text-xs text-fg2">{String(ix.macd_state)}</span></div>
+                <div className="flex justify-between"><span className="text-mute">Bollinger %B</span><span>{ix.bollinger_pct_b ?? "-"} <span className="text-xs text-mute">{ix.bollinger_state ? String(ix.bollinger_state) : ""}</span></span></div>
+                <div className="flex justify-between"><span className="text-mute">ATR (14)</span><span>{ix.atr14_pct_of_price}% of price</span></div>
+                <div className="mt-1 text-xs text-mute">Summaries of past prices, not trading signals.</div>
               </div>)}
             <div className="mt-3 text-xs text-mute">&#9650; = expected risk up, &#9660; = down. This describes risk, not a price call.</div>
           </>) : <div className="text-sm text-mute">No forecast for {sel}.</div>}

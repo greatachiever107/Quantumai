@@ -15,7 +15,7 @@ export default function Portfolio() {
     }).catch((e) => setErr(e.message));
   }, []);
   const rows = useMemo(() => {
-    const it = fc?.items ?? [];
+    const it = (fc?.items ?? []).filter((f) => !f.is_fund);   // funds are benchmarks, not holdings
     const inv = it.map((f) => 1 / f.forecast_vol_ann_pct);
     const sum = inv.reduce((a, b) => a + b, 0);
     const base = it.map((f, i) => {
