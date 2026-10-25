@@ -11,14 +11,14 @@ problems = []
 try:
     px = pd.read_csv("snapshot/data/stocks.csv", usecols=["Date", "Ticker"], parse_dates=["Date"])
     n = px["Ticker"].nunique()
-    if n < 11:
-        problems.append(f"only {n} tickers in stocks.csv (expected 11 incl. SPY)")
+    if n < 12:
+        problems.append(f"only {n} tickers in stocks.csv (expected 12 incl. SPY and QQQ)")
     age = (pd.Timestamp.now(tz="UTC").tz_localize(None).normalize() - px["Date"].max()).days
     if age > 6:
         problems.append(f"latest price date {px['Date'].max().date()} is {age} days old")
     fc = pd.read_csv("snapshot/output/processed/volatility_forecast.csv")
-    if len(fc) < 10:
-        problems.append(f"forecast has only {len(fc)} stocks (expected 10)")
+    if len(fc) < 11:
+        problems.append(f"forecast has only {len(fc)} tickers (expected 11: 10 stocks + QQQ)")
     er = pd.read_csv("snapshot/events/earnings.csv")
     if er["Ticker"].nunique() < 10:
         problems.append(f"earnings dates found for only {er['Ticker'].nunique()} stocks")

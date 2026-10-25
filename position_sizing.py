@@ -34,7 +34,7 @@ df = pd.read_csv("data/stocks.csv", parse_dates=["Date"])
 ret = (df.pivot(index="Date", columns="Ticker", values="daily_return_pct")
          .sort_index().dropna())
 mkt = ret["SPY"]
-tickers = [t for t in ret.columns if t != "SPY"]
+tickers = [t for t in ret.columns if t not in ("SPY", "QQQ")]   # stocks only, no funds
 R = ret[tickers] / 100.0
 lv = lambda x: np.log(x + EPS)
 feats = ["lv1", "lv5", "lv20", "lv60", "mkt_lv20"]

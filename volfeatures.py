@@ -11,6 +11,7 @@ import numpy as np
 import pandas as pd
 
 HORIZON, EPS = 5, 1e-6
+FUNDS = {"QQQ"}          # ETFs: forecast them, but no earnings and not part of the market-stress average
 lv = lambda x: np.log(x + EPS)
 
 OLD = ["lv1", "lv5", "lv20", "lv60", "mkt_lv20"]                       # v2 features
@@ -40,7 +41,7 @@ def build_panel(use_events=True, use_earnings=True, verbose=True,
     gap = np.log(O / C.shift(1)).abs() * 100                        # overnight gap, %
     mkt_r, mkt_p = ret["SPY"], park["SPY"]
     tickers = [t for t in ret.columns if t != "SPY"]
-    avg_lv20 = pd.concat([lv(ret[t].rolling(20).std()) for t in tickers], axis=1).mean(axis=1)
+    avg_lv20 = pd.concat([lv(ret[t].rolling(20).std()) for t in tickers if t not in FUNDS], axis=1).mean(axis=1)
 
     # ---- market-wide scheduled events (FOMC, NFP, anything in extra_events) ----
     EV = {}
@@ -96,7 +97,10 @@ def build_panel(use_events=True, use_earnings=True, verbose=True,
         })
         for k, v in EV.items():
             f[k] = v
-        if er is not None:
+        if er is not None and t in FUNDS:
+            for c in EARN:
+                f[c] = 0.0
+        elif er is not None:
             e_i = er.loc[er["Ticker"] == t, "i"].values
             if len(e_i):
                 s = pd.Series(0.0, index=idx_ext)

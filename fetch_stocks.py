@@ -25,6 +25,7 @@ sectors = {
     "JPM": "Financials", "V": "Financials",
     "XOM": "Energy", "JNJ": "Healthcare",
     "SPY": "Market benchmark",
+    "QQQ": "Nasdaq-100 ETF",
 }
 
 os.makedirs(CACHE, exist_ok=True)

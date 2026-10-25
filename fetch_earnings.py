@@ -26,7 +26,7 @@ os.makedirs(CACHE, exist_ok=True)
 os.makedirs("events", exist_ok=True)
 
 tickers = sorted(t for t in pd.read_csv("data/stocks.csv", usecols=["Ticker"])["Ticker"].unique()
-                 if t != "SPY")            # SPY is a fund: it has no earnings
+                 if t not in ("SPY", "QQQ"))   # funds have no earnings
 
 
 def tidy(raw, ticker):
