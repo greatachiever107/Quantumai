@@ -41,5 +41,5 @@ export default function Chart({ candles, sma20, sma50 }: { candles: Candle[]; sm
     chart.timeScale().fitContent();
     return () => chart.remove();
   }, [candles, sma20, sma50, theme]);
-  return <div ref={ref} className="h-[360px] w-full" />;
+  return <div ref={ref} className="h-full w-full" />;
 }

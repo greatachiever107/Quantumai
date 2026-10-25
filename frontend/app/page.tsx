@@ -56,7 +56,7 @@ export default function Dashboard() {
   useEffect(() => {
     Promise.all([
       get<ForecastsResp>("/forecasts"), get<{ tickers: string[] }>("/watchlist"),
-      get<ListResp>("/tracking/summary"), get<ListResp>("/calendar?days=21"), get<ListResp>("/trend"),
+      get<ListResp>("/tracking/summary"), get<ListResp>("/calendar?days=30"), get<ListResp>("/trend"),
     ]).then(([f, w, t, c, trd]) => {
       setFc(f); setWl(w.tickers); setTrack(t); setCal(c);
       setTr(Object.fromEntries(trd.items.map((r) => [String(r.ticker), r])));
@@ -64,7 +64,7 @@ export default function Dashboard() {
     }).catch((e) => setErr(`Cannot reach the API (${e.message}). Is the backend running on port 8000?`));
   }, []);
 
-  useEffect(() => { get<NewsResp>("/news?limit=5").then(setNews).catch(() => {}); }, []);
+  useEffect(() => { get<NewsResp>("/news?limit=4").then(setNews).catch(() => {}); }, []);
   useEffect(() => { setIx(null); get<Record<string, string | number | null>>(`/indicators/${sel}`).then(setIx).catch(() => setIx(null)); }, [sel]);
 
   useEffect(() => {
@@ -104,7 +104,7 @@ export default function Dashboard() {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-3">
-        <div className="card tone-brand lg:col-span-2">
+        <div className="card tone-brand flex flex-col lg:col-span-2">
           <div className="mb-2 flex flex-wrap items-center gap-2">
             <div className="text-lg font-semibold">{sel}</div>
             {cMode === "demo" && <span className="rounded bg-warn/20 px-2 py-0.5 text-xs text-warn">DEMO prices</span>}
@@ -118,9 +118,9 @@ export default function Dashboard() {
               <button onClick={() => setSma50(!sma50)} className={`rounded px-2 py-1 text-xs ${sma50 ? "text-warn" : "text-mute"}`}>SMA50</button>
             </div>
           </div>
-          {loading ? <div className="flex h-[360px] items-center justify-center text-mute">Loading chart...</div>
-            : cErr ? <div className="flex h-[360px] items-center justify-center text-down">No price data for {sel} ({cErr})</div>
-            : <Chart candles={candles} sma20={sma20} sma50={sma50} />}
+          {loading ? <div className="flex min-h-[360px] flex-1 items-center justify-center text-mute">Loading chart...</div>
+            : cErr ? <div className="flex min-h-[360px] flex-1 items-center justify-center text-down">No price data for {sel} ({cErr})</div>
+            : <div className="relative min-h-[360px] flex-1"><div className="absolute inset-0"><Chart candles={candles} sma20={sma20} sma50={sma50} /></div></div>}
         </div>
 
         <div className="card tone-ai">
@@ -152,9 +152,9 @@ export default function Dashboard() {
             {ix && ix.rsi14 != null && (
               <div className="mt-4 border-t border-line pt-3 text-sm">
                 <div className="mb-1 font-semibold">Indicators (computed locally)</div>
-                <div className="flex justify-between"><span className="text-mute">RSI (14)</span><span>{ix.rsi14} <span className="text-xs text-mute">{String(ix.rsi_zone)}</span></span></div>
+                <div className="flex justify-between"><span className="text-mute">RSI (14)</span><span>{Number(ix.rsi14).toFixed(1)} <span className="text-xs text-mute">{String(ix.rsi_zone)}</span></span></div>
                 <div className="flex justify-between"><span className="text-mute">MACD</span><span className="text-xs text-fg2">{String(ix.macd_state)}</span></div>
-                <div className="flex justify-between"><span className="text-mute">Bollinger %B</span><span>{ix.bollinger_pct_b ?? "-"} <span className="text-xs text-mute">{ix.bollinger_state ? String(ix.bollinger_state) : ""}</span></span></div>
+                <div className="flex justify-between"><span className="text-mute">Bollinger %B</span><span>{ix.bollinger_pct_b != null ? Number(ix.bollinger_pct_b).toFixed(2) : "-"} <span className="text-xs text-mute">{ix.bollinger_state ? String(ix.bollinger_state) : ""}</span></span></div>
                 <div className="flex justify-between"><span className="text-mute">ATR (14)</span><span>{ix.atr14_pct_of_price}% of price</span></div>
                 <div className="mt-1 text-xs text-mute">Summaries of past prices, not trading signals.</div>
               </div>)}
@@ -182,7 +182,7 @@ export default function Dashboard() {
         <div className="card tone-warn">
           <Title icon={Radar} tone="warn">Risk radar</Title>
           <div className="mb-2 text-xs text-mute">Earnings first, then biggest forecast rise</div>
-          {radar.slice(0, 6).map((f) => (
+          {radar.map((f) => (
             <div key={f.ticker} onClick={() => setSel(f.ticker)} className="flex cursor-pointer items-center justify-between border-t border-line py-1.5 text-sm hover:bg-fg/5">
               <span className="font-medium">{f.ticker}{f.earnings_in_window && <span className="ml-1 text-warn">&#9733;</span>}</span>
               <span className="text-mute">{f.forecast_vol_ann_pct}%</span>
@@ -191,8 +191,8 @@ export default function Dashboard() {
         </div>
 
         <div className="card tone-ai">
-          <Title icon={CalendarDays} tone="ai">Upcoming events (21 days)</Title>
-          {cal?.items.length ? cal.items.slice(0, 8).map((e, i) => (
+          <Title icon={CalendarDays} tone="ai">Upcoming events (30 days)</Title>
+          {cal?.items.length ? cal.items.slice(0, 10).map((e, i) => (
             <div key={i} className="flex justify-between border-t border-line py-1.5 text-sm">
               <span className="text-mute">{String(e.date)}</span><span>{e.ticker ? `${e.ticker} earnings` : String(e.type)}</span></div>))
             : <div className="text-sm text-mute">No events found. Run build_events.py and fetch_earnings.py.</div>}
@@ -209,6 +209,12 @@ export default function Dashboard() {
                   <td>{r.ens_mae}</td><td>{r.naive_mae}</td><td>{r.closer_than_naive_pct}%</td><td>{r.direction_hit_pct}%</td></tr>))}</tbody></table>
           ) : <div className="text-sm text-mute">No tracking results yet. Run track_forecasts.py.</div>}
           <div className="mt-2 text-xs text-mute">&ldquo;live&rdquo; = saved in real time; &ldquo;backfill&rdquo; = rebuilt from past data (not a live record).</div>
+          <div className="mt-4 grid gap-3 border-t border-line pt-3 text-sm sm:grid-cols-3">
+            <div><div className="font-medium">Model error vs naive</div><div className="text-xs text-mute">Average size of the miss, in daily volatility. Lower is better. The naive rule is &ldquo;same as the last 20 days&rdquo;.</div></div>
+            <div><div className="font-medium">Closer than naive</div><div className="text-xs text-mute">How often the model&rsquo;s forecast landed nearer the actual outcome than the naive rule did.</div></div>
+            <div><div className="font-medium">Direction hit</div><div className="text-xs text-mute">How often the model correctly called whether volatility would rise or fall.</div></div>
+          </div>
+          <div className="mt-3 text-xs text-mute">Live results build up one week at a time, after each weekly update scores the previous forecast.</div>
         </div>
         <div className="card tone-info"><Title icon={Newspaper} tone="info">News &amp; sentiment</Title>
           {news && news.items.length > 0 ? <NewsList items={news.items} compact />
