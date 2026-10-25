@@ -30,7 +30,7 @@ export default function Overview() {
               <span className="flex items-center gap-2"><span className="text-xl font-semibold">{o.qqq_recent_vol_ann_pct ?? "-"}%</span><Badge r={o.qqq_regime ?? null} /></span></div></div>
           <div className="card tone-ai"><div className="text-xs text-mute">Forecast risk rising / falling</div>
             <div className="text-2xl font-semibold"><span className="text-info">&#9650; {o.rising}</span> / <span className="text-info">&#9660; {o.falling}</span></div>
-            <div className="text-sm text-mute">of {o.rising + o.falling} stocks</div></div>
+            <div className="text-sm text-mute">of {o.rising + o.falling} instruments</div></div>
           <div className="card tone-warn"><div className="text-xs text-mute">Regimes</div>
             <div className="mt-1 flex flex-wrap gap-1">{Object.entries(o.regime_counts).map(([k, v]) => <span key={k} className="text-sm"><Badge r={k} /> {v}</span>)}</div></div>
           <div className="card tone-up"><div className="text-xs text-mute">Earnings in next 5 days</div>
@@ -40,7 +40,10 @@ export default function Overview() {
           <div className="card tone-warn"><div className="mb-2 font-semibold">Kenya shilling (KES) &mdash; CBK indicative rates</div>
             {kes.data_mode === "none" ? <div className="text-sm text-mute">{kes.note}</div> : (
               <div className="flex flex-wrap gap-6">
-                {["USD", "EUR", "GBP", "JPY"].map((c) => kes.items.find((i) => i.currency === c)).filter(Boolean).map((i) => (
+                {(() => {
+                  const pref = ["USD", "EUR", "GBP", "JPY"].map((c) => kes.items.find((i) => i.currency === c)).filter((x): x is NonNullable<typeof x> => Boolean(x));
+                  return pref.length >= 2 ? pref : kes.items.slice(0, 8);   // show whatever the feed returned
+                })().map((i) => (
                   <div key={i!.currency}><div className="text-xs text-mute">KES per {i!.currency}</div>
                     <div className="text-xl font-semibold">{i!.kes_per_unit.toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
                     <div className="text-xs text-mute">{i!.date ?? ""}</div></div>))}

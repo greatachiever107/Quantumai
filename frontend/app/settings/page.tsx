@@ -9,6 +9,7 @@ export default function Settings() {
   const [h, setH] = useState<Health | null>(null);
   const [err, setErr] = useState("");
   const [src, setSrc] = useState<Row[]>([]);
+  const [raw, setRaw] = useState("");
   useEffect(() => {
     get<Health>("/health").then(setH).catch((e) => setErr(e.message));
     get<{ items: Row[] }>("/sources").then((r) => setSrc(r.items)).catch(() => {});
@@ -40,6 +41,13 @@ export default function Settings() {
                 <td className="text-fg2">{String(s.status)}</td></tr>))}</tbody></table>
           <div className="mt-2 text-xs text-mute">Free tiers can change. Prices here are end-of-day; none of this is licensed for public redistribution unless stated.</div>
         </div>)}
+      <div className="card tone-warn text-sm">
+        <div className="mb-1 text-lg font-semibold">Check the Kenya shilling feed</div>
+        <div className="mb-2 text-fg2">Shows what the CBK/Frankfurter source returns, so the parser can be verified.</div>
+        <button onClick={() => { setRaw("Loading..."); get<{ raw?: string; error?: string }>("/fx/kes/raw").then((r) => setRaw(r.raw ?? r.error ?? "No data")).catch((e) => setRaw(String(e.message))); }}
+          className="rounded-xl bg-gradient-to-r from-brand to-ai px-3 py-2 text-sm font-semibold text-white">Show raw response</button>
+        {raw && <pre className="mt-3 max-h-72 overflow-auto whitespace-pre-wrap break-all rounded-xl bg-bg/70 p-3 text-xs text-fg2">{raw}</pre>}
+      </div>
       <div className="card text-sm text-fg2 tone-info">
         <div className="mb-2 text-lg font-semibold">Refresh the data</div>
         Run <code className="rounded bg-bg px-1">python run_weekly.py</code> in the project folder to download new prices, events and earnings,
