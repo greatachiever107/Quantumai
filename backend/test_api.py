@@ -234,3 +234,12 @@ def test_news_summary_is_rule_based():
     from backend.main import news_summary
     s = news_summary([{"sentiment": "Positive", "tickers": [{"ticker": "AAPL"}]}, {"sentiment": "Negative", "tickers": [{"ticker": "AAPL"}, {"ticker": "TSLA"}]}])
     assert "2 headlines: 1 positive, 1 negative" in s and "AAPL (2)" in s
+
+
+def test_kes_cross_rates_from_eur_based_feed():
+    from backend.main import parse_kes
+    raw = [{"date": "2026-10-23", "base": "EUR", "quote": q, "rate": r}
+           for q, r in [("EUR", 1.0), ("GBP", 0.83731), ("JPY", 175.91), ("KES", 145.34), ("USD", 1.1189)]]
+    got = {i["currency"]: i["kes_per_unit"] for i in parse_kes(raw)}
+    assert got["EUR"] == 145.34 and abs(got["USD"] - 129.9) < 0.1 and abs(got["GBP"] - 173.6) < 0.1
+    assert abs(got["JPY"] - 0.8262) < 0.001 and "KES" not in got

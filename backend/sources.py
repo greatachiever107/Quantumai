@@ -53,7 +53,7 @@ SOURCES = [
   "freshness": "Daily CBK indicative rates",
   "terms": "Source is the Central Bank of Kenya; attribute CBK and Frankfurter",
   "redistribution": "Unverified",
-  "status": "Used for the Kenya shilling card (parser not yet verified live)"
+  "status": "Used for the Kenya shilling card (cross-rates computed from the EUR-based feed)"
  },
  {
   "id": "cbk",

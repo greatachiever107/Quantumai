@@ -555,6 +555,27 @@ def parse_kes(raw):
         else:
             continue
         out[cur] = {"currency": cur, "kes_per_unit": round(kes, 4), "date": it.get("date")}
+    # The feed quotes every currency against one base (e.g. 1 EUR = x USD, 1 EUR = 145.34 KES).
+    # Cross-rate: KES per 1 unit of X = (KES per base) / (X per base). Direct KES pairs above win.
+    by_base = {}
+    for it in items:
+        if isinstance(it, dict):
+            b = str(it.get("base") or "").upper()
+            q = str(it.get("quote") or it.get("target") or it.get("currency") or "").upper()
+            try:
+                r = float(it.get("rate"))
+            except (TypeError, ValueError):
+                continue
+            if b and q and r > 0:
+                by_base.setdefault(b, {})[q] = (r, it.get("date"))
+    for b, quotes in by_base.items():
+        if b == "KES" or "KES" not in quotes:
+            continue
+        kes_per_base, date = quotes["KES"]
+        out.setdefault(b, {"currency": b, "kes_per_unit": round(kes_per_base, 4), "date": date})
+        for q, (r, d) in quotes.items():
+            if q not in ("KES", b):
+                out.setdefault(q, {"currency": q, "kes_per_unit": round(kes_per_base / r, 4), "date": d})
     return sorted(out.values(), key=lambda x: x["currency"])
 
 
