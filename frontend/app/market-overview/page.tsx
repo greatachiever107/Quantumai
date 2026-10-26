@@ -50,7 +50,7 @@ export default function Overview() {
               </div>)}
             <div className="mt-2 text-xs text-mute">Source: Central Bank of Kenya via the Frankfurter API. Indicative daily rates, not executable broker quotes.</div></div>)}
         <div className="card tone-brand"><div className="mb-2 font-semibold">Forecast risk by sector</div>
-          <table className="w-full text-sm"><thead><tr><th className="th">Sector</th><th className="th">Stocks</th><th className="th">Avg forecast vol</th><th className="th">Avg change</th></tr></thead>
+          <table className="w-full text-sm"><thead><tr><th className="th">Sector</th><th className="th">Instruments</th><th className="th">Avg forecast vol</th><th className="th">Avg change</th></tr></thead>
             <tbody>{[...o.sectors].sort((a, b) => b.avg_forecast_vol_ann_pct - a.avg_forecast_vol_ann_pct).map((s) => (
               <tr key={s.sector} className="border-t border-line"><td className="py-1.5 font-medium">{s.sector}</td><td>{s.stocks}</td>
                 <td>{s.avg_forecast_vol_ann_pct}%</td><td className="text-info">{pct(s.avg_change_pct)}</td></tr>))}</tbody></table>
