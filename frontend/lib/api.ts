@@ -2,7 +2,8 @@ export const API = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000";
 
 export type Forecast = {
   ticker: string; recent_vol_ann_pct: number; forecast_vol_ann_pct: number; change_pct: number;
-  typical_daily_move_pct: number; earnings_in_window: boolean; next_earnings: string | null; regime: string | null; is_fund?: boolean;
+  typical_daily_move_pct: number; earnings_in_window: boolean; next_earnings: string | null; regime: string | null;
+  forecast_low_ann_pct: number | null; forecast_high_ann_pct: number | null; is_fund?: boolean;
 };
 export type ForecastsResp = { data_mode: string; as_of: string | null; note: string; items: Forecast[] };
 export type Candle = { date: string; open: number; high: number; low: number; close: number; volume: number | null };

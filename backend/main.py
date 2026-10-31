@@ -55,6 +55,12 @@ def read(path):
     return pd.read_csv(path) if Path(path).exists() else None
 
 
+def opt(row, key):
+    """Optional numeric column -> float, or None when the column/value is missing."""
+    v = row.get(key)
+    return None if v is None or pd.isna(v) else float(v)
+
+
 class Forecast(BaseModel):
     ticker: str
     recent_vol_ann_pct: float
@@ -64,6 +70,8 @@ class Forecast(BaseModel):
     earnings_in_window: bool
     next_earnings: str | None = None
     regime: str | None = None          # Calm / Normal / Elevated / High (vs the stock's own history)
+    forecast_low_ann_pct: float | None = None    # 80% range from walk-forward calibration
+    forecast_high_ann_pct: float | None = None   # (None until model_volatility_v3.py has been run)
     is_fund: bool = False
 
 
@@ -154,12 +162,15 @@ def forecasts():
         typical_daily_move_pct=r["typical_daily_move_pct"],
         earnings_in_window=bool(r.get("earnings_in_window", False)),
         next_earnings=None if pd.isna(r.get("next_earnings")) else str(r["next_earnings"]),
-        regime=regime(r["Ticker"], r["typical_daily_move_pct"], px), is_fund=r["Ticker"] in FUNDS)
+        regime=regime(r["Ticker"], r["typical_daily_move_pct"], px), is_fund=r["Ticker"] in FUNDS,
+        forecast_low_ann_pct=opt(r, "forecast_low_ann_pct"),
+        forecast_high_ann_pct=opt(r, "forecast_high_ann_pct"))
         for _, r in f.iterrows()]
     as_of = str(px["Date"].max().date()) if px is not None else None
     return ForecastsResponse(
         data_mode="live-data", as_of=as_of, items=items,
-        note="Forecasts the SIZE of price swings, not direction. Educational; not financial advice.")
+        note="Forecasts the SIZE of price swings, not direction. Educational; not financial advice. "
+             "The range is where realised volatility landed 80% of the time in backtests.")
 
 
 @app.get("/api/v1/forecasts/{ticker}", response_model=Forecast)
@@ -216,6 +227,16 @@ def models_summary():
     s = s.rename(columns={s.columns[0]: "method"})
     return {"data_mode": "live-data", "note": "Walk-forward backtest; lower MAE/QLIKE is better.",
             "items": json.loads(s.to_json(orient="records"))}
+
+
+@app.get("/api/v1/models/calibration")
+def models_calibration():
+    """How well the 80% forecast ranges held up out-of-sample (target coverage = 80)."""
+    s = read(P / "interval_calibration.csv")
+    return {"data_mode": "none" if s is None else "live-data",
+            "note": "Quantiles are learned from earlier periods only and scored on later ones. "
+                    "Coverage well below 80 means the range is too narrow in that situation.",
+            "items": [] if s is None else json.loads(s.to_json(orient="records"))}
 
 
 @app.get("/api/v1/calendar")

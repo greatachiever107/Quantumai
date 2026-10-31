@@ -114,7 +114,35 @@ if "earn_next5" in res.columns:
                             for k in ["naive_vol20", "har_v2_per_stock", "ensemble"]}})
         print(pd.DataFrame(rows).to_string(index=False))
 
+# Forecast ranges: how far the real 5-day volatility lands from the ensemble forecast.
+# z = log(actual / forecast). The 10th/90th percentiles give an 80% range:
+#   low = forecast * exp(q10),  high = forecast * exp(q90)
+# Honest check: quantiles are learned ONLY from earlier folds and scored on later ones.
+res["z"] = np.log(res["y"] / res["ensemble"])
+res["earn_flag"] = (res["earn_next5"] > 0) if "earn_next5" in res.columns else False
+calib = []
+for name, m in [("normal", ~res["earn_flag"]), ("earnings", res["earn_flag"])]:
+    g = res[m]
+    if len(g) < 100:
+        continue
+    q10, q90 = g["z"].quantile([0.1, 0.9])
+    hit = n = 0
+    for k in range(2, int(res["fold"].max()) + 1):
+        past, cur = res[m & (res["fold"] < k)]["z"], res[m & (res["fold"] == k)]["z"]
+        if len(past) < 100 or len(cur) == 0:
+            continue
+        lo, hi = past.quantile([0.1, 0.9])
+        hit += int(((cur >= lo) & (cur <= hi)).sum())
+        n += len(cur)
+    calib.append({"window": name, "n": len(g), "q10": round(float(q10), 3),
+                  "q90": round(float(q90), 3),
+                  "oos_coverage_pct": round(100 * hit / n, 1) if n else np.nan})
+calib = pd.DataFrame(calib)
+print("\n=== 80% forecast range: calibration (target out-of-sample coverage = 80) ===")
+print(calib.to_string(index=False))
+
 os.makedirs("output/processed", exist_ok=True)
 mae.to_csv("output/processed/model_volatility_v3_by_stock.csv")
 summary.to_csv("output/processed/model_volatility_v3_summary.csv")
-print("\nSaved output/processed/model_volatility_v3_*.csv")
+calib.to_csv("output/processed/interval_calibration.csv", index=False)
+print("\nSaved output/processed/model_volatility_v3_*.csv and interval_calibration.csv")

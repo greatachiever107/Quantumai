@@ -8,6 +8,7 @@ import { Badge, pct } from "@/lib/ui";
 
 type Key = keyof Forecast;
 const COLS: [string, Key][] = [["Ticker", "ticker"], ["Recent vol %", "recent_vol_ann_pct"], ["Forecast vol %", "forecast_vol_ann_pct"],
+  ["80% range", "forecast_high_ann_pct"],
   ["Change", "change_pct"], ["Daily move %", "typical_daily_move_pct"], ["Regime", "regime"], ["Next earnings", "next_earnings"]];
 
 export default function Forecasts() {
@@ -51,6 +52,7 @@ export default function Forecasts() {
               <tr key={f.ticker} className="border-t border-line">
                 <td className="py-2 font-medium">{f.ticker}{f.is_fund && <span className="ml-1.5 rounded bg-ai/15 px-1.5 py-0.5 text-[10px] font-semibold text-ai">ETF</span>}{f.earnings_in_window && <span className="ml-1 text-warn">&#9733;</span>}</td>
                 <td>{f.recent_vol_ann_pct}</td><td>{f.forecast_vol_ann_pct}</td>
+                <td className="whitespace-nowrap text-mute">{f.forecast_low_ann_pct != null && f.forecast_high_ann_pct != null ? `${f.forecast_low_ann_pct}\u2013${f.forecast_high_ann_pct}` : "-"}</td>
                 <td className="text-info">{pct(f.change_pct)}</td>
                 <td>{f.typical_daily_move_pct}</td><td><Badge r={f.regime} /></td><td>{f.next_earnings ?? "-"}</td>
                 <td className={tr[f.ticker]?.label === "Uptrend" ? "text-up" : tr[f.ticker]?.label === "Downtrend" ? "text-down" : "text-mute"}>{String(tr[f.ticker]?.label ?? "-")}</td>
@@ -58,7 +60,7 @@ export default function Forecasts() {
               </tr>))}
           </tbody></table>
         </div>
-        <div className="mt-3 text-xs text-mute">{d?.note} Click a column header to sort. &#9733; = earnings inside the 5-day window. Trend and 3M price describe the past, not the future.</div>
+        <div className="mt-3 text-xs text-mute">{d?.note} Click a column header to sort. &#9733; = earnings inside the 5-day window. Ranges run a bit narrow in earnings weeks. Trend and 3M price describe the past, not the future.</div>
       </div>
     </Shell>
   );

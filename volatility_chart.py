@@ -43,6 +43,8 @@ gbm = fit_predict(HistGradientBoostingRegressor(
     max_depth=3, learning_rate=0.05, max_iter=250, min_samples_leaf=100,
     l2_regularization=1.0, random_state=0), lab[NEW], lab["y"], latest[NEW])
 ens = (latest["ewma"].values + ridge + gbm) / 3
+earn_flag = ((latest["earn_next5"].values > 0) if "earn_next5" in latest.columns
+             else np.zeros(len(latest), dtype=bool))
 
 out = pd.DataFrame({
     "Ticker": tickers,
@@ -59,6 +61,19 @@ if "earn_next5" in latest.columns:
         out["next_earnings"] = out["Ticker"].map(nxt).dt.date
 else:
     out["earnings_in_window"] = False
+
+# 80% range from model_volatility_v3.py's walk-forward calibration (run it once, or run_weekly --full)
+CAL = "output/processed/interval_calibration.csv"
+if os.path.exists(CAL):
+    cal = pd.read_csv(CAL).set_index("window")
+    if "normal" in cal.index:
+        def edge(col):
+            row_e = cal.loc["earnings", col] if "earnings" in cal.index else cal.loc["normal", col]
+            return np.where(earn_flag, row_e, cal.loc["normal", col])
+        out["forecast_low_ann_pct"] = (ens * np.exp(edge("q10")) * ANN).round(1)
+        out["forecast_high_ann_pct"] = (ens * np.exp(edge("q90")) * ANN).round(1)
+else:
+    print("(No forecast ranges: run model_volatility_v3.py once to create", CAL + ")")
 out = out.sort_values("forecast_5d_vol_ann_pct")
 
 print(f"\nForecast as of {last.date()} (next {vf.HORIZON} trading days), ensemble model")
@@ -76,6 +91,11 @@ a1.barh(y + h / 2, out["recent_20d_vol_ann_pct"], h, label="Recent (last 20 days
         color="#9aa5b1")
 a1.barh(y - h / 2, out["forecast_5d_vol_ann_pct"], h, label="Forecast (next 5 days)",
         color="#2563eb")
+if "forecast_low_ann_pct" in out.columns:
+    fc = out["forecast_5d_vol_ann_pct"].values
+    a1.errorbar(fc, y - h / 2, xerr=[fc - out["forecast_low_ann_pct"].values,
+                                     out["forecast_high_ann_pct"].values - fc],
+                fmt="none", ecolor="#1e3a8a", capsize=3, lw=1, label="80% range")
 a1.set_yticks(y)
 a1.set_yticklabels([t + ("  \u2605 earnings" if e else "")
                     for t, e in zip(out["Ticker"], out["earnings_in_window"])])

@@ -45,6 +45,32 @@ def test_live_data_and_validation(tmp_path):
     assert c.get("/api/v1/forecasts/TSLA").json()["ticker"] == "TSLA"
 
 
+def test_forecast_range_and_calibration(tmp_path):
+    (tmp_path / "output/processed").mkdir(parents=True)
+    (tmp_path / "data").mkdir()
+    d = pd.bdate_range("2025-01-01", periods=400)
+    pd.DataFrame({"Date": d, "Open": 1.0, "High": 1.1, "Low": 0.9, "Close": 1.0, "Volume": 5,
+                  "Ticker": "TSLA", "daily_return_pct": [0.1, -0.2] * 200}).to_csv(
+        tmp_path / "data/stocks.csv", index=False)
+    base = {"Ticker": ["TSLA"], "recent_20d_vol_ann_pct": [30.0], "forecast_5d_vol_ann_pct": [45.0],
+            "forecast_vs_recent_pct": [50.0], "typical_daily_move_pct": [2.8],
+            "earnings_in_window": [True]}
+    fc = tmp_path / "output/processed/volatility_forecast.csv"
+    pd.DataFrame(base).to_csv(fc, index=False)
+    c, _ = client(tmp_path)
+    assert c.get("/api/v1/forecasts/TSLA").json()["forecast_low_ann_pct"] is None   # old CSVs still work
+    assert c.get("/api/v1/models/calibration").json()["data_mode"] == "none"
+    pd.DataFrame({**base, "forecast_low_ann_pct": [22.0], "forecast_high_ann_pct": [90.0]}).to_csv(fc, index=False)
+    pd.DataFrame({"window": ["normal"], "n": [100], "q10": [-0.7], "q90": [0.4],
+                  "oos_coverage_pct": [82.0]}).to_csv(
+        tmp_path / "output/processed/interval_calibration.csv", index=False)
+    c, _ = client(tmp_path)
+    f = c.get("/api/v1/forecasts/TSLA").json()
+    assert f["forecast_low_ann_pct"] == 22.0 and f["forecast_high_ann_pct"] == 90.0
+    j = c.get("/api/v1/models/calibration").json()
+    assert j["data_mode"] == "live-data" and j["items"][0]["oos_coverage_pct"] == 82.0
+
+
 def test_watchlist_persists_and_validates(tmp_path):
     c, _ = client(tmp_path)
     assert c.put("/api/v1/watchlist", json={"tickers": ["aapl", "AAPL", "nvda"]}).json()["tickers"] == ["AAPL", "NVDA"]
