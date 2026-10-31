@@ -51,10 +51,10 @@ export default function Forecasts() {
             {rows.map((f) => (
               <tr key={f.ticker} className="border-t border-line">
                 <td className="py-2 font-medium">{f.ticker}{f.is_fund && <span className="ml-1.5 rounded bg-ai/15 px-1.5 py-0.5 text-[10px] font-semibold text-ai">ETF</span>}{f.earnings_in_window && <span className="ml-1 text-warn">&#9733;</span>}</td>
-                <td>{f.recent_vol_ann_pct}</td><td>{f.forecast_vol_ann_pct}</td>
-                <td className="whitespace-nowrap text-mute">{f.forecast_low_ann_pct != null && f.forecast_high_ann_pct != null ? `${f.forecast_low_ann_pct}\u2013${f.forecast_high_ann_pct}` : "-"}</td>
+                <td>{f.recent_vol_ann_pct.toFixed(1)}</td><td>{f.forecast_vol_ann_pct.toFixed(1)}</td>
+                <td className="whitespace-nowrap text-mute">{f.forecast_low_ann_pct != null && f.forecast_high_ann_pct != null ? `${f.forecast_low_ann_pct.toFixed(1)}\u2013${f.forecast_high_ann_pct.toFixed(1)}` : "-"}</td>
                 <td className="text-info">{pct(f.change_pct)}</td>
-                <td>{f.typical_daily_move_pct}</td><td><Badge r={f.regime} /></td><td>{f.next_earnings ?? "-"}</td>
+                <td>{f.typical_daily_move_pct.toFixed(2)}</td><td><Badge r={f.regime} /></td><td>{f.next_earnings ?? "-"}</td>
                 <td className={tr[f.ticker]?.label === "Uptrend" ? "text-up" : tr[f.ticker]?.label === "Downtrend" ? "text-down" : "text-mute"}>{String(tr[f.ticker]?.label ?? "-")}</td>
                 <td className={Number(tr[f.ticker]?.ret_3m_pct) > 0 ? "text-up" : Number(tr[f.ticker]?.ret_3m_pct) < 0 ? "text-down" : ""}>{tr[f.ticker] ? `${Number(tr[f.ticker].ret_3m_pct) > 0 ? "+" : ""}${tr[f.ticker].ret_3m_pct}%` : "-"}</td>
               </tr>))}

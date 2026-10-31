@@ -203,7 +203,7 @@ export default function Dashboard() {
         <div className="card tone-up lg:col-span-2">
           <Title icon={Target} tone="up">Forecast tracking (scored on what actually happened)</Title>
           {track?.items.length ? (
-            <table className="w-full text-sm"><thead><tr>{["Set", "Scored", "Model err", "Naive err", "Closer than naive", "Direction hit"].map((h) => <th key={h} className="th">{h}</th>)}</tr></thead>
+            <table className="w-full text-sm"><thead><tr>{["Set", "Scored", "Model err", "Naive err", "Closer than naive", "Vol direction hit"].map((h) => <th key={h} className="th">{h}</th>)}</tr></thead>
               <tbody>{track.items.map((r) => (
                 <tr key={String(r.source)} className="border-t border-line"><td className="py-1.5">{String(r.source)}</td><td>{r.forecasts}</td>
                   <td>{r.ens_mae}</td><td>{r.naive_mae}</td><td>{r.closer_than_naive_pct}%</td><td>{r.direction_hit_pct}%</td></tr>))}</tbody></table>
@@ -212,7 +212,7 @@ export default function Dashboard() {
           <div className="mt-4 grid gap-3 border-t border-line pt-3 text-sm sm:grid-cols-3">
             <div><div className="font-medium">Model error vs naive</div><div className="text-xs text-mute">Average size of the miss, in daily volatility. Lower is better. The naive rule is &ldquo;same as the last 20 days&rdquo;.</div></div>
             <div><div className="font-medium">Closer than naive</div><div className="text-xs text-mute">How often the model&rsquo;s forecast landed nearer the actual outcome than the naive rule did.</div></div>
-            <div><div className="font-medium">Direction hit</div><div className="text-xs text-mute">How often the model correctly called whether volatility would rise or fall.</div></div>
+            <div><div className="font-medium">Vol direction hit</div><div className="text-xs text-mute">How often the model correctly called whether volatility would rise or fall. Not whether the price rises or falls.</div></div>
           </div>
           <div className="mt-3 text-xs text-mute">Live results build up one week at a time, after each weekly update scores the previous forecast.</div>
         </div>
