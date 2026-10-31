@@ -1,4 +1,4 @@
 source,forecasts,weeks,ens_mae,naive_mae,closer_than_naive_pct,direction_hit_pct,big_calls,big_call_hit_pct
-live,10,1,0.449,0.485,50.0,50.0,5,60.0
+live,30,3,0.383,0.434,46.7,66.7,18,77.8
 backfill,260,26,0.609,0.756,60.4,65.4,141,76.6
-all,270,27,0.603,0.746,60.0,64.8,146,76.0
+all,290,29,0.586,0.723,59.0,65.5,159,76.7
